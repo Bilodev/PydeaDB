@@ -1,6 +1,7 @@
 import os
+from typing import Any
 import pandas as pd
-import csv  
+import csv
 from rich.console import Console
 from rich.table import Table
 
@@ -50,7 +51,7 @@ class File:
         if os.path.exists(f'{file}.csv'): self.file = file+'.csv'
         else: raise FileNotFoundError
     
-    def add_column(self,col_name: str):
+    def add_column(self,col_name: str) -> None:
         '''remove added column from row or it could create some issues'''
         df = pd.read_csv(self.file)
         if str(col_name) in df.columns: return
@@ -58,11 +59,11 @@ class File:
         os.remove(self.file)
         df.to_csv(self.file, index=False)
         
-    def add_columns(self,cols: list):
+    def add_columns(self,cols: list) -> None:
         for i in cols:
             self.add_column(i)
         
-    def add_row(self, row: list):
+    def add_row(self, row: list) -> None:
         df = pd.read_csv(self.file)
         
         if len(df.columns) <= len(row): raise ValueError('It seems like you have passed too many arguments')
@@ -74,10 +75,20 @@ class File:
             # Add contents of list as last row in the csv file
             csv_writer.writerow(row) 
     
-    
-    def delete_byindex(self, pos: int, failed='Position Not Found'):
+    def delete_byindex(self, pos: int | list[int], failed='Position Not Found') ->  None | Any:
         
         df = pd.read_csv(self.file)
+        
+        if isinstance(pos,int):
+            try:        
+                df.drop(pos-1, inplace=True) 
+            except:
+                return failed
+            df.loc[pos-1:,'#'] -=1
+            os.remove(self.file)
+            df.to_csv(self.file, index=False)
+            return
+        
         for i in pos:
             try:        
                 df.drop(i-1, inplace=True) 
@@ -87,11 +98,22 @@ class File:
             df.loc[i-1:,'#'] -=1
             os.remove(self.file)
             df.to_csv(self.file, index=False)
-        return 'Ok'
-    
+            
+    def update_byindex(self,pos: int, newRow: dict) -> None:
+        df = pd.read_csv(self.file)
+        
+        temp = {}
+        temp['#'] = pos
+        temp.update(newRow)
+        newRow = temp
+        
+        df.loc[pos-1] = newRow
+        
+        os.remove(self.file)
+        df.to_csv(self.file, index=False)
         
     
-    def show_table(self):
+    def show_table(self) -> None:
         
         table = Table(show_header=True, header_style='bold blue')
         console = Console()
@@ -109,26 +131,20 @@ class File:
             table.add_row(*(t), style='bold #6be9ff') # insert finale
     
         console.print(table)
-    
-        
-       
-    def search(self, filter: dict):
-        return filter
 
-    def set_column(self,column: str, attribute):
+    def set_column(self,column: str, attribute) -> None:
         '''Update a column  for all rows and creates it if its not exist'''
         df = pd.read_csv(self.file)
         df[column] = attribute
         os.remove(self.file)
         df.to_csv(self.file, index=False)
         
-    def remove_column(self,column: str):
+    def remove_column(self,column: str) -> None:
         df = pd.read_csv(self.file)
         try:
             df.drop(column, axis=1, inplace=True)
         except:
-            print('column not found')
-            return
+            return None
         os.remove(self.file)
         df.to_csv(self.file, index=False)
         
@@ -136,12 +152,32 @@ class File:
         self.show_table()
         return ''
         
+    def query(self, query: str) -> dict | None:
+        data = pd.read_csv(self.file)
+        ris = data.query(query)
+        if not ris.empty:
+            return ris.to_dict('records')
+        return None
         
-    def search_and_delete():
-        pass
+    def search(self, filter: dict)-> list[dict] | None:
+        data = pd.read_csv(self.file)
+        for key,value in filter.items():            
+                ris = data[data[key] == value]
+                if ris.empty:
+                    return None
+                data = ris
+        return ris.to_dict('records')
+    
+    
+    def delete(self, query: str) -> None:
+        ris = self.query(query)
+        f = [i['#'] for i in ris]
+        self.delete_byindex(f)
+        
     
    
-    def search_and_update():
-        pass
-    
-    
+    def update(self, query: str, newRow: dict) -> None:
+        ris = self.query(query)
+        for i in ris:
+            self.update_byindex(i['#'],newRow)
+       
